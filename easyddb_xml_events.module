@@ -1,0 +1,64 @@
+<?php
+/**
+ * @file
+ */
+
+/**
+ * Implements hook_menu().
+ */
+function easyddb_xml_events_menu() {
+  $items = array();
+
+  $items['lib/%/xml/events'] = array(
+    'title' => 'Easyddb xml events',
+    'description' => 'Render library events in xml format',
+    'page callback' => 'easyddb_xml_events_process',
+    'page arguments' => array(1),
+    'access arguments' => array('access content'),
+    'type' => MENU_CALLBACK,
+  );
+
+  return $items;
+}
+
+/**
+ * Implements hook_theme().
+ */
+function easyddb_xml_events_theme($existing, $type, $theme, $path) {
+  $hooks = array();
+
+  $hooks['easyddb_xml_events_render_xml'] = array(
+    'variables' => array(
+      'nodes' => NULL,
+      'library' => NULL,
+    ),
+    'template' => 'templates/easyddb_xml_events_render',
+  );
+
+  return $hooks;
+}
+
+/**
+ * @param int $library.
+ */
+function easyddb_xml_events_process($library) {
+  $library = node_load($library);
+  $query = db_select('og_membership', 'ogm');
+  $query->fields('ogm', array('etid'));
+  $query->condition('ogm.gid', (int)$library->nid, '=');
+  $query->condition('ogm.entity_type', 'node', '=');
+
+  $result = $query->execute()->fetchAll();
+
+  $nodes = array();
+  foreach ($result as $item) {
+    $node = node_load($item->etid);
+    if ($node->type == 'ding_event') {
+      $nodes[] = $node;
+    }
+  }
+
+//  $xml = theme('easyddb_xml_events_render_xml', array('nodes' => $nodes, 'library' => $library));
+
+  dump($nodes);
+}
