@@ -22,27 +22,11 @@ function easyddb_xml_events_menu() {
 }
 
 /**
- * Implements hook_theme().
- */
-function easyddb_xml_events_theme($existing, $type, $theme, $path) {
-  $hooks = array();
-
-  $hooks['easyddb_xml_events_render_xml'] = array(
-    'variables' => array(
-      'nodes' => NULL,
-      'library' => NULL,
-    ),
-    'template' => 'templates/easyddb_xml_events_render',
-  );
-
-  return $hooks;
-}
-
-/**
  * @param int $library.
  */
 function easyddb_xml_events_process($library) {
   $library = node_load($library);
+
   $query = db_select('og_membership', 'ogm');
   $query->fields('ogm', array('etid'));
   $query->condition('ogm.gid', (int)$library->nid, '=');
@@ -50,15 +34,20 @@ function easyddb_xml_events_process($library) {
 
   $result = $query->execute()->fetchAll();
 
-  $nodes = array();
+  $xml_obj = new SimpleXMLElement('<xml/>');
+  $xml_obj->addChild('library', $library->title);
+
   foreach ($result as $item) {
     $node = node_load($item->etid);
     if ($node->type == 'ding_event') {
-      $nodes[] = $node;
+      $event = $xml_obj->addChild('event');
+      $event->addChild('title', $node->title);
+      $event->addChild('startDateTime', $node->field_ding_event_date[LANGUAGE_NONE][0]['value']);
+      $event->addChild('endDateTime', $node->field_ding_event_date[LANGUAGE_NONE][0]['value2']);
+      $event->addChild('location', implode($node->field_ding_event_location[LANGUAGE_NONE][0]));
     }
   }
 
-//  $xml = theme('easyddb_xml_events_render_xml', array('nodes' => $nodes, 'library' => $library));
-
-  dump($nodes);
+  header('Content-type: text/xml');
+  print $xml_obj->asXML();
 }
