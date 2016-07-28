@@ -1,0 +1,7 @@
+name = easyDDB XML events
+description = Render library events in xml format
+core = 7.x
+package = easyDDB
+version = 7.x-2.4.4+easy
+dependencies = ding_event
+dependencies = ding_library
