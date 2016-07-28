@@ -48,16 +48,16 @@ function easyddb_xml_events_feed(stdClass $node) {
       )
     )->fetchCol(0);
 
-    $allowed_fields = array(
-      'field_ding_event_body',
-      'field_ding_event_date',
-      'field_ding_event_lead',
-      'field_ding_event_location',
-    );
-    $fields = array_keys(field_info_instances('node', 'ding_event'));
-    $fields = array_intersect($allowed_fields, $fields);
-
     if (!empty($event_nids)) {
+      $allowed_fields = array(
+        'field_ding_event_body',
+        'field_ding_event_date',
+        'field_ding_event_lead',
+        'field_ding_event_location',
+      );
+      $fields = array_keys(field_info_instances('node', 'ding_event'));
+      $fields = array_intersect($allowed_fields, $fields);
+
       $nodes = node_load_multiple($event_nids);
 
       // Loop through nodes.
@@ -70,14 +70,12 @@ function easyddb_xml_events_feed(stdClass $node) {
           $field_data = field_get_items('node', $event_node, $field);
 
           if (!empty($field_data)) {
-            if (is_array($field_data)) {
-              // Loop through each same field.
-              foreach ($field_data as $field_entry) {
-                $field_element = $event_element->addChild($field);
-                // Loop through every field property.
-                foreach ($field_entry as $field_property => $value) {
-                  $field_element->addChild($field_property, strip_tags(html_entity_decode($value)));
-                }
+            // Loop through each same field.
+            foreach ($field_data as $field_entry) {
+              $field_element = $event_element->addChild($field);
+              // Loop through every field property.
+              foreach ($field_entry as $field_property => $value) {
+                $field_element->addChild($field_property, strip_tags(html_entity_decode($value)));
               }
             }
           }
