@@ -9,10 +9,10 @@
 function easyddb_xml_events_menu() {
   $items = array();
 
-  $items['lib/%/xml/events'] = array(
+  $items['node/%node/events'] = array(
     'title' => 'Easyddb xml events',
     'description' => 'Render library events in xml format',
-    'page callback' => 'easyddb_xml_events_process',
+    'page callback' => 'easyddb_xml_events_feed',
     'page arguments' => array(1),
     'access arguments' => array('access content'),
     'type' => MENU_CALLBACK,
@@ -22,32 +22,70 @@ function easyddb_xml_events_menu() {
 }
 
 /**
- * @param int $library.
+ * Prepares and outputs xml feed with upcoming events linked to a library.
+ *
+ * @param stdClass $node
+ *   Loaded node object.
  */
-function easyddb_xml_events_process($library) {
-  $library = node_load($library);
+function easyddb_xml_events_feed(stdClass $node) {
+  drupal_add_http_header('Content-type', 'text/xml; charset=utf-8');
+  $xml = new SimpleXMLElement('<events />');
 
-  $query = db_select('og_membership', 'ogm');
-  $query->fields('ogm', array('etid'));
-  $query->condition('ogm.gid', (int)$library->nid, '=');
-  $query->condition('ogm.entity_type', 'node', '=');
+  if ($node->type == 'ding_library') {
+    $now = date('Y-m-d', REQUEST_TIME);
 
-  $result = $query->execute()->fetchAll();
+    // Fetches upcoming events linked to a certain library.
+    $event_nids = db_query(
+      "SELECT node.nid AS nid FROM {node} node
+      LEFT JOIN {og_membership} og_membership_node ON node.nid = og_membership_node.etid AND og_membership_node.entity_type = 'node'
+      LEFT JOIN {node} node_og_membership ON og_membership_node.gid = node_og_membership.nid AND og_membership_node.group_type = 'node'
+      LEFT JOIN {field_data_field_ding_event_date} field_data_field_ding_event_date ON node.nid = field_data_field_ding_event_date.entity_id AND (field_data_field_ding_event_date.entity_type = 'node' AND field_data_field_ding_event_date.deleted = '0')
+      WHERE (( (node.status = '1') AND (og_membership_node.gid = :gid ) )AND(( (node.type IN  ('ding_event')) AND (DATE_FORMAT(ADDTIME(field_data_field_ding_event_date.field_ding_event_date_value, SEC_TO_TIME(7200)), '%Y-%m-%d') >= :now OR DATE_FORMAT(ADDTIME(field_data_field_ding_event_date.field_ding_event_date_value2, SEC_TO_TIME(7200)), '%Y-%m-%d') >= :now) )))
+      ORDER BY CASE WHEN field_data_field_ding_event_date.field_ding_event_date_value < NOW() THEN NOW() ELSE field_data_field_ding_event_date.field_ding_event_date_value END ASC",
+      array(
+        ':gid' => $node->nid,
+        ':now' => $now,
+      )
+    )->fetchCol(0);
 
-  $xml_obj = new SimpleXMLElement('<xml/>');
-  $xml_obj->addChild('library', $library->title);
+    $allowed_fields = array(
+      'field_ding_event_body',
+      'field_ding_event_date',
+      'field_ding_event_lead',
+      'field_ding_event_location',
+    );
+    $fields = array_keys(field_info_instances('node', 'ding_event'));
+    $fields = array_intersect($allowed_fields, $fields);
 
-  foreach ($result as $item) {
-    $node = node_load($item->etid);
-    if ($node->type == 'ding_event') {
-      $event = $xml_obj->addChild('event');
-      $event->addChild('title', $node->title);
-      $event->addChild('startDateTime', $node->field_ding_event_date[LANGUAGE_NONE][0]['value']);
-      $event->addChild('endDateTime', $node->field_ding_event_date[LANGUAGE_NONE][0]['value2']);
-      $event->addChild('location', implode($node->field_ding_event_location[LANGUAGE_NONE][0]));
+    if (!empty($event_nids)) {
+      $nodes = node_load_multiple($event_nids);
+
+      // Loop through nodes.
+      foreach ($nodes as $event_node) {
+        $event_element = $xml->addChild('event');
+        $event_element->addChild('title', $event_node->title);
+
+        // Loop through field list.
+        foreach ($fields as $field) {
+          $field_data = field_get_items('node', $event_node, $field);
+
+          if (!empty($field_data)) {
+            if (is_array($field_data)) {
+              // Loop through each same field.
+              foreach ($field_data as $field_entry) {
+                $field_element = $event_element->addChild($field);
+                // Loop through every field property.
+                foreach ($field_entry as $field_property => $value) {
+                  $field_element->addChild($field_property, strip_tags(html_entity_decode($value)));
+                }
+              }
+            }
+          }
+        }
+      }
     }
   }
 
-  header('Content-type: text/xml');
-  print $xml_obj->asXML();
+  echo $xml->asXML();
+  drupal_exit(0);
 }
