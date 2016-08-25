@@ -54,7 +54,7 @@ function easyddb_xml_events_feed(stdClass $node) {
         'field_ding_event_date',
         'field_ding_event_lead',
         'field_ding_event_location',
-        'field_rooms',
+        'field_ding_event_rooms',
       );
       $fields = array_keys(field_info_instances('node', 'ding_event'));
       $fields = array_intersect($allowed_fields, $fields);
