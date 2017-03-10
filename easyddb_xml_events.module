@@ -9,7 +9,7 @@
 function easyddb_xml_events_menu() {
   $items = array();
 
-  $items['node/%node/events'] = array(
+  $items['node/%/events'] = array(
     'title' => 'Easyddb xml events',
     'description' => 'Render library events in xml format',
     'page callback' => 'easyddb_xml_events_feed',
@@ -24,65 +24,69 @@ function easyddb_xml_events_menu() {
 /**
  * Prepares and outputs xml feed with upcoming events linked to a library.
  *
- * @param stdClass $node
+ * @param string $nids
  *   Loaded node object.
  */
-function easyddb_xml_events_feed(stdClass $node) {
+function easyddb_xml_events_feed($nids) {
   drupal_add_http_header('Content-type', 'text/xml; charset=utf-8');
   $xml = new SimpleXMLElement('<events />');
 
-  if ($node->type == 'ding_library') {
-    $now = date('Y-m-d', REQUEST_TIME);
+  $nodes = node_load_multiple(explode(',', $nids));
 
-    // Fetches upcoming events linked to a certain library.
-    $event_nids = db_query(
-      "SELECT node.nid AS nid FROM {node} node
+  foreach ($nodes as $node) {
+    if ($node->type == 'ding_library') {
+      $now = date('Y-m-d', REQUEST_TIME);
+
+      // Fetches upcoming events linked to a certain library.
+      $event_nids = db_query(
+        "SELECT node.nid AS nid FROM {node} node
       LEFT JOIN {og_membership} og_membership_node ON node.nid = og_membership_node.etid AND og_membership_node.entity_type = 'node'
       LEFT JOIN {node} node_og_membership ON og_membership_node.gid = node_og_membership.nid AND og_membership_node.group_type = 'node'
       LEFT JOIN {field_data_field_ding_event_date} field_data_field_ding_event_date ON node.nid = field_data_field_ding_event_date.entity_id AND (field_data_field_ding_event_date.entity_type = 'node' AND field_data_field_ding_event_date.deleted = '0')
       WHERE (( (node.status = '1') AND (og_membership_node.gid = :gid ) )AND(( (node.type IN  ('ding_event')) AND (DATE_FORMAT(ADDTIME(field_data_field_ding_event_date.field_ding_event_date_value, SEC_TO_TIME(7200)), '%Y-%m-%d') >= :now OR DATE_FORMAT(ADDTIME(field_data_field_ding_event_date.field_ding_event_date_value2, SEC_TO_TIME(7200)), '%Y-%m-%d') >= :now) )))
       ORDER BY CASE WHEN field_data_field_ding_event_date.field_ding_event_date_value < NOW() THEN NOW() ELSE field_data_field_ding_event_date.field_ding_event_date_value END ASC",
-      array(
-        ':gid' => $node->nid,
-        ':now' => $now,
-      )
-    )->fetchCol(0);
+        array(
+          ':gid' => $node->nid,
+          ':now' => $now,
+        )
+      )->fetchCol(0);
 
-    if (!empty($event_nids)) {
-      $allowed_fields = array(
-        'field_ding_event_body',
-        'field_ding_event_date',
-        'field_ding_event_lead',
-        'field_ding_event_location',
-        'field_ding_event_rooms',
-      );
-      $fields = array_keys(field_info_instances('node', 'ding_event'));
-      $fields = array_intersect($allowed_fields, $fields);
+      if (!empty($event_nids)) {
+        $allowed_fields = array(
+          'field_ding_event_body',
+          'field_ding_event_date',
+          'field_ding_event_lead',
+          'field_ding_event_location',
+          'field_ding_event_rooms',
+        );
+        $fields = array_keys(field_info_instances('node', 'ding_event'));
+        $fields = array_intersect($allowed_fields, $fields);
 
-      $nodes = node_load_multiple($event_nids);
+        $nodes = node_load_multiple($event_nids);
 
-      // Loop through nodes.
-      foreach ($nodes as $event_node) {
-        $event_element = $xml->addChild('event');
-        $event_element->addChild('title', $event_node->title);
+        // Loop through nodes.
+        foreach ($nodes as $event_node) {
+          $event_element = $xml->addChild('event');
+          $event_element->addChild('title', $event_node->title);
 
-        // Loop through field list.
-        foreach ($fields as $field) {
-          $field_data = field_get_items('node', $event_node, $field);
+          // Loop through field list.
+          foreach ($fields as $field) {
+            $field_data = field_get_items('node', $event_node, $field);
 
-          if (!empty($field_data)) {
-            // Loop through each same field.
-            foreach ($field_data as $field_entry) {
-              $field_element = $event_element->addChild($field);
-              // Loop through every field property.
-              foreach ($field_entry as $field_property => $value) {
-                if ($field_property == 'tid') {
-                  $term = taxonomy_term_load($value);
-                  $field_property = 'room';
-                  $value = $term->name;
+            if (!empty($field_data)) {
+              // Loop through each same field.
+              foreach ($field_data as $field_entry) {
+                $field_element = $event_element->addChild($field);
+                // Loop through every field property.
+                foreach ($field_entry as $field_property => $value) {
+                  if ($field_property == 'tid') {
+                    $term = taxonomy_term_load($value);
+                    $field_property = 'room';
+                    $value = $term->name;
+                  }
+
+                  $field_element->addChild($field_property, strip_tags(html_entity_decode($value)));
                 }
-
-                $field_element->addChild($field_property, strip_tags(html_entity_decode($value)));
               }
             }
           }
