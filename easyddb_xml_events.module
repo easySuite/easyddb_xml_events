@@ -31,63 +31,67 @@ function easyddb_xml_events_feed($nids) {
   drupal_add_http_header('Content-type', 'text/xml; charset=utf-8');
   $xml = new SimpleXMLElement('<events />');
 
-  $nodes = node_load_multiple(explode(',', $nids));
+  $nids = explode(',', $nids);
+  $lib_nodes = node_load_multiple($nids);
 
-  foreach ($nodes as $node) {
-    if ($node->type == 'ding_library') {
-      $now = date('Y-m-d', REQUEST_TIME);
+  foreach ($lib_nodes as $node) {
+    if ($node->type != 'ding_library') {
+      $arr_id = array_search($node->id, $nids);
+      unset($nids[$arr_id]);
+    }
+  }
 
-      // Fetches upcoming events linked to a certain library.
-      $event_nids = db_query(
-        "SELECT node.nid AS nid FROM {node} node
-      LEFT JOIN {og_membership} og_membership_node ON node.nid = og_membership_node.etid AND og_membership_node.entity_type = 'node'
-      LEFT JOIN {node} node_og_membership ON og_membership_node.gid = node_og_membership.nid AND og_membership_node.group_type = 'node'
-      LEFT JOIN {field_data_field_ding_event_date} field_data_field_ding_event_date ON node.nid = field_data_field_ding_event_date.entity_id AND (field_data_field_ding_event_date.entity_type = 'node' AND field_data_field_ding_event_date.deleted = '0')
-      WHERE (( (node.status = '1') AND (og_membership_node.gid = :gid ) )AND(( (node.type IN  ('ding_event')) AND (DATE_FORMAT(ADDTIME(field_data_field_ding_event_date.field_ding_event_date_value, SEC_TO_TIME(7200)), '%Y-%m-%d') >= :now OR DATE_FORMAT(ADDTIME(field_data_field_ding_event_date.field_ding_event_date_value2, SEC_TO_TIME(7200)), '%Y-%m-%d') >= :now) )))
-      ORDER BY CASE WHEN field_data_field_ding_event_date.field_ding_event_date_value < NOW() THEN NOW() ELSE field_data_field_ding_event_date.field_ding_event_date_value END ASC",
-        array(
-          ':gid' => $node->nid,
-          ':now' => $now,
-        )
-      )->fetchCol(0);
+  $now = date('Y-m-d', REQUEST_TIME);
 
-      if (!empty($event_nids)) {
-        $allowed_fields = array(
-          'field_ding_event_body',
-          'field_ding_event_date',
-          'field_ding_event_lead',
-          'field_ding_event_location',
-          'field_ding_event_rooms',
-        );
-        $fields = array_keys(field_info_instances('node', 'ding_event'));
-        $fields = array_intersect($allowed_fields, $fields);
+  // Fetches upcoming events linked to library or libraries.
+  $event_nids = db_query(
+    "SELECT node.nid AS nid FROM {node} node
+  LEFT JOIN {og_membership} og_membership_node ON node.nid = og_membership_node.etid AND og_membership_node.entity_type = 'node'
+  LEFT JOIN {node} node_og_membership ON og_membership_node.gid = node_og_membership.nid AND og_membership_node.group_type = 'node'
+  LEFT JOIN {field_data_field_ding_event_date} field_data_field_ding_event_date ON node.nid = field_data_field_ding_event_date.entity_id AND (field_data_field_ding_event_date.entity_type = 'node' AND field_data_field_ding_event_date.deleted = '0')
+  WHERE (( (node.status = '1') AND (og_membership_node.gid IN (:gids) ) )AND(( (node.type IN  ('ding_event')) AND (DATE_FORMAT(ADDTIME(field_data_field_ding_event_date.field_ding_event_date_value, SEC_TO_TIME(7200)), '%Y-%m-%d') >= :now OR DATE_FORMAT(ADDTIME(field_data_field_ding_event_date.field_ding_event_date_value2, SEC_TO_TIME(7200)), '%Y-%m-%d') >= :now) )))
+  ORDER BY CASE WHEN field_data_field_ding_event_date.field_ding_event_date_value < NOW() THEN NOW() ELSE field_data_field_ding_event_date.field_ding_event_date_value END ASC",
+    array(
+      ':gids' => implode(', ', $nids),
+      ':now' => $now,
+    )
+  )->fetchCol(0);
 
-        $nodes = node_load_multiple($event_nids);
+  if (!empty($event_nids)) {
+    $allowed_fields = array(
+      'field_ding_event_body',
+      'field_ding_event_date',
+      'field_ding_event_lead',
+      'field_ding_event_location',
+      'field_ding_event_rooms',
+    );
+    $fields = array_keys(field_info_instances('node', 'ding_event'));
+    $fields = array_intersect($allowed_fields, $fields);
 
-        // Loop through nodes.
-        foreach ($nodes as $event_node) {
-          $event_element = $xml->addChild('event');
-          $event_element->addChild('title', $event_node->title);
+    $nodes = node_load_multiple($event_nids);
 
-          // Loop through field list.
-          foreach ($fields as $field) {
-            $field_data = field_get_items('node', $event_node, $field);
+    // Loop through nodes.
+    foreach ($nodes as $event_node) {
+      $event_element = $xml->addChild('event');
+      $event_element->addChild('title', $event_node->title);
 
-            if (!empty($field_data)) {
-              // Loop through each same field.
-              foreach ($field_data as $field_entry) {
-                $field_element = $event_element->addChild($field);
-                // Loop through every field property.
-                foreach ($field_entry as $field_property => $value) {
-                  if ($field_property == 'tid') {
-                    $term = taxonomy_term_load($value);
-                    $field_property = 'room';
-                    $value = $term->name;
-                  }
+      // Loop through field list.
+      foreach ($fields as $field) {
+        $field_data = field_get_items('node', $event_node, $field);
 
-                  $field_element->addChild($field_property, strip_tags(html_entity_decode($value)));
-                }
+        if (!empty($field_data)) {
+          // Loop through each same field.
+          foreach ($field_data as $field_entry) {
+            $field_element = $event_element->addChild($field);
+            // Loop through every field property.
+            foreach ($field_entry as $field_property => $value) {
+              if ($field_property == 'tid') {
+                $term = taxonomy_term_load($value);
+                $field_property = 'room';
+                $value = $term->name;
               }
+
+              $field_element->addChild($field_property, strip_tags(html_entity_decode($value)));
             }
           }
         }
