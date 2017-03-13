@@ -52,7 +52,7 @@ function easyddb_xml_events_feed($nids) {
   WHERE (( (node.status = '1') AND (og_membership_node.gid IN (:gids) ) )AND(( (node.type IN  ('ding_event')) AND (DATE_FORMAT(ADDTIME(field_data_field_ding_event_date.field_ding_event_date_value, SEC_TO_TIME(7200)), '%Y-%m-%d') >= :now OR DATE_FORMAT(ADDTIME(field_data_field_ding_event_date.field_ding_event_date_value2, SEC_TO_TIME(7200)), '%Y-%m-%d') >= :now) )))
   ORDER BY CASE WHEN field_data_field_ding_event_date.field_ding_event_date_value < NOW() THEN NOW() ELSE field_data_field_ding_event_date.field_ding_event_date_value END ASC",
     array(
-      ':gids' => implode(', ', $nids),
+      ':gids' => $nids,
       ':now' => $now,
     )
   )->fetchCol(0);
