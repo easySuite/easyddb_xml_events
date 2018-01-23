@@ -1,4 +1,4 @@
-easyDDB XML events
+easyOPAC XML events
 ==========
 
 Module will create xml for all events of particular library.

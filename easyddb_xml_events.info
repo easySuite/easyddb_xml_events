@@ -1,4 +1,4 @@
-name = easyDDB XML events
+name = easyOPAC XML events
 description = Render library events in xml format
 core = 7.x
 package = easyOPAC
