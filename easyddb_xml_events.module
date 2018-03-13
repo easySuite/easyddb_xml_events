@@ -28,7 +28,6 @@ function easyddb_xml_events_menu() {
  *   Loaded node object.
  */
 function easyddb_xml_events_feed($nids) {
-  drupal_add_http_header('Content-type', 'text/xml; charset=utf-8');
   $xml = new SimpleXMLElement('<events />');
 
   $nids = explode(',', $nids);
@@ -64,6 +63,7 @@ function easyddb_xml_events_feed($nids) {
       'field_ding_event_lead',
       'field_ding_event_location',
       'field_ding_event_rooms',
+      'field_ding_event_list_image',
     );
     $fields = array_keys(field_info_instances('node', 'ding_event'));
     $fields = array_intersect($allowed_fields, $fields);
@@ -90,6 +90,9 @@ function easyddb_xml_events_feed($nids) {
                 $field_property = 'room';
                 $value = $term->name;
               }
+              elseif ($field == 'field_ding_event_list_image' && $field_property == 'uri') {
+                $value = file_create_url($value);
+              }
 
               $field_element->addChild($field_property, strip_tags(html_entity_decode($value)));
             }
@@ -99,6 +102,8 @@ function easyddb_xml_events_feed($nids) {
     }
   }
 
+  drupal_add_http_header('Content-type', 'text/xml; charset=utf-8');
   echo $xml->asXML();
+
   drupal_exit(0);
 }
