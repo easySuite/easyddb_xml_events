@@ -94,6 +94,10 @@ function easyddb_xml_events_feed($nids) {
                 $value = file_create_url($value);
               }
 
+              // Some metadata can be an array, we do not need this yet.
+              if (is_array($value)) {
+                continue;
+              }
               $field_element->addChild($field_property, strip_tags(html_entity_decode($value)));
             }
           }
