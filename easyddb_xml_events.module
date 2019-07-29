@@ -62,7 +62,7 @@ function easyddb_xml_events_feed($nids) {
       'field_ding_event_date',
       'field_ding_event_lead',
       'field_ding_event_location',
-      'field_ding_event_rooms',
+      'field_ding_event_place',
       'field_ding_event_list_image',
     );
     $fields = array_keys(field_info_instances('node', 'ding_event'));
